@@ -155,6 +155,7 @@ func resourceAwsEMRCluster() *schema.Resource {
 									"volumes_per_instance": {
 										Type:     schema.TypeInt,
 										Optional: true,
+										Default:  1,
 									},
 								},
 							},
@@ -822,28 +823,37 @@ func expandInstanceGroupConfigs(instanceGroupConfigs []interface{}) []*emr.Insta
 		configInstanceCount := configAttributes["instance_count"].(int)
 		configInstanceType := configAttributes["instance_type"].(string)
 		configName := configAttributes["name"].(string)
-
-		//ebsConfig := readEmrEBSConfig(raw.(schema.ResourceData))
-		ebsConfig := &emr.EbsConfiguration{}
-
-		ebsBlockDeviceConfigs := make([]*emr.EbsBlockDeviceConfig, 0)
-		ebsBlockDeviceConfig := &emr.EbsBlockDeviceConfig{
-			VolumesPerInstance: aws.Int64(int64(1)),
-			VolumeSpecification: &emr.VolumeSpecification{
-				SizeInGB:   aws.Int64(int64(2000)),
-				VolumeType: aws.String("gp2"),
-			},
-		}
-		ebsBlockDeviceConfigs = append(ebsBlockDeviceConfigs, ebsBlockDeviceConfig)
-		ebsConfig.EbsBlockDeviceConfigs = ebsBlockDeviceConfigs
-
 		config := &emr.InstanceGroupConfig{
-			Name:             aws.String(configName),
-			InstanceRole:     aws.String(configInstanceRole),
-			InstanceType:     aws.String(configInstanceType),
-			InstanceCount:    aws.Int64(int64(configInstanceCount)),
-			EbsConfiguration: ebsConfig,
+			Name:          aws.String(configName),
+			InstanceRole:  aws.String(configInstanceRole),
+			InstanceType:  aws.String(configInstanceType),
+			InstanceCount: aws.Int64(int64(configInstanceCount)),
 		}
+
+		if rawEbsConfigs, ok := configAttributes["ebs_config"]; ok {
+			//ebsConfig := readEmrEBSConfig(raw.(schema.ResourceData))
+			ebsConfig := &emr.EbsConfiguration{}
+
+			ebsBlockDeviceConfigs := make([]*emr.EbsBlockDeviceConfig, 0)
+			for _, rawEbsConfig := range rawEbsConfigs.(*schema.Set).List() {
+				rawEbsConfig := rawEbsConfig.(map[string]interface{})
+				ebsBlockDeviceConfig := &emr.EbsBlockDeviceConfig{
+					VolumesPerInstance: aws.Int64(int64(rawEbsConfig["volumes_per_instance"].(int))),
+					VolumeSpecification: &emr.VolumeSpecification{
+						SizeInGB:   aws.Int64(int64(rawEbsConfig["size"].(int))),
+						VolumeType: aws.String(rawEbsConfig["type"].(string)),
+					},
+				}
+				if v, ok := rawEbsConfig["iops"].(int); ok && v != 0 {
+					ebsBlockDeviceConfig.VolumeSpecification.Iops = aws.Int64(int64(v))
+				}
+				ebsBlockDeviceConfigs = append(ebsBlockDeviceConfigs, ebsBlockDeviceConfig)
+			}
+			ebsConfig.EbsBlockDeviceConfigs = ebsBlockDeviceConfigs
+
+			config.EbsConfiguration = ebsConfig
+		}
+
 		configsOut = append(configsOut, config)
 	}
 
