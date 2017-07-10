@@ -185,7 +185,7 @@ func resourceAwsEMRCluster() *schema.Resource {
 				},
 			},
 			"bootstrap_action": {
-				Type:     schema.TypeSet,
+				Type:     schema.TypeList,
 				Optional: true,
 				ForceNew: true,
 				Elem: &schema.Resource{
